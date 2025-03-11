@@ -176,7 +176,6 @@ class SpotifyApi:
             self.GID_METADATA_API_URL.format(gid=gid, media_type=media_type)
         )
         check_response(response)
-        print(response.text)
         return response.json()
 
     def get_lyrics(self, track_id: str) -> dict | None:
@@ -357,10 +356,9 @@ class SpotifyApi:
         self._refresh_session_auth()
         self.session.headers.update(
             {
-                'client-token': 'AABCxIQgBJgbMRr/Bxzl70P0O5DLkI09yWxlS5g7mli8rqXjVyWOp8jhWFexkHETjH2Ls4PMaNQEfGrnMTRNJJ2h0G/yZmqA2wKJV7XGMlazIQcG0CbWJabPNfj5Ieg2REfcBVzqI5FwAUr8g6AD/RyIEVCnnDro7H85cnSptZWN93soHslO2+vXAtcD7AyAy91zmcFvH9cdctOqLeCQXVgQhAT+dpadWzF0x53MBclkEYhfw/OrbOGR2Y5R+Cx1Tp7BhnhLyaixxAsnF765EaIhRL11qhvzJyrABAgXvQnbPw==',
+                'client-token': 'AAAnsBQ+hm79vQPw+oajdv6v1UyDiqmEfJAsIGdWOtOC3Tl1ZCELwaBQNYGrIsu7rSnQYAo3jzNav3sPqsHmrBopptkre+ahd5Y5JpoTlcH8fjGgk0cUYetZIQBkoM3IJFzbuMlxcVqhiHCwQikQUed0zRlsVlpCRe30hTQ+X/IopBeWNHrNAP71xVxcfnNSvK23nY1yoJpmKGMuDpIwurWhYOg5EAfGNmgZ3QSQAveYEXQxNMw9+WbuHMWr+gs7XwnofBneinNwArHj4jb6XKY9PUBLv3U7DgiVuSoYnl9Aziea',
    
         })
-        print(self.session.headers)
         response = self.session.post(
             self.WIDEVINE_LICENSE_API_URL.format(type=media_type),
             challenge,
