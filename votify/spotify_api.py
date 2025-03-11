@@ -1,5 +1,8 @@
 from __future__ import annotations
-
+import hmac
+import hashlib
+import time
+import base64
 import functools
 import json
 import re
@@ -16,6 +19,7 @@ from .utils import check_response
 
 class SpotifyApi:
     SPOTIFY_HOME_PAGE_URL = "https://open.spotify.com/"
+    SPOTIFY_GET_ACCESS_TOKEN_URL= "https://open.spotify.com/get_access_token?reason=init&productType=web-player&totp={totp}"
     CLIENT_VERSION = "1.2.46.25.g7f189073"
     LYRICS_API_URL = "https://spclient.wg.spotify.com/color-lyrics/v2/track/{track_id}"
     METADATA_API_URL = "https://api.spotify.com/v1/{type}/{item_id}"
@@ -26,7 +30,7 @@ class SpotifyApi:
         "https://gew4-spclient.spotify.com/playplay/v1/key/{file_id}"
     )
     WIDEVINE_LICENSE_API_URL = (
-        "https://gue1-spclient.spotify.com/widevine-license/v1/{type}/license"
+        "https://gew1-spclient.spotify.com/widevine-license/v1/{type}/license"
     )
     SEEK_TABLE_API_URL = "https://seektables.scdn.co/seektable/{file_id}.json"
     TRACK_CREDITS_API_URL = "https://spclient.wg.spotify.com/track-credits-view/v0/experimental/{track_id}/credits"
@@ -55,33 +59,77 @@ class SpotifyApi:
             self.session.cookies.update(self.cookies)
         self.session.headers.update(
             {
-                "accept": "application/json",
-                "accept-language": "en-US",
-                "content-type": "application/json",
-                "origin": self.SPOTIFY_HOME_PAGE_URL,
-                "priority": "u=1, i",
-                "referer": self.SPOTIFY_HOME_PAGE_URL,
-                "sec-ch-ua": '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-platform": '"Windows"',
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "same-site",
-                "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
-                "spotify-app-version": self.CLIENT_VERSION,
-                "app-platform": "WebPlayer",
+                'accept': '*/*',
+                'accept-language': 'en-US,en;q=0.9,ja;q=0.8',
+                'dnt': '1',
+                'origin': self.SPOTIFY_HOME_PAGE_URL,
+                'priority': 'u=1, i',
+                'referer': self.SPOTIFY_HOME_PAGE_URL,
+                'sec-ch-ua': '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                'content-type': 'application/x-www-form-urlencoded',
+                'spotify-app-version': '1.2.54.219.g19a93a5d',
+                'accept': 'application/json',
+                # "accept": "application/json",
+                # "accept-language": "en-US",
+                # "content-type": "application/json",
+                # "origin": self.SPOTIFY_HOME_PAGE_URL,
+                # "priority": "u=1, i",
+                # "referer": self.SPOTIFY_HOME_PAGE_URL,
+                # "sec-ch-ua": '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
+                # "sec-ch-ua-mobile": "?0",
+                # "sec-ch-ua-platform": '"Windows"',
+                # "sec-fetch-dest": "empty",
+                # "sec-fetch-mode": "cors",
+                # "sec-fetch-site": "same-site",
+                # "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                # "spotify-app-version": self.CLIENT_VERSION,
             }
         )
         self._set_session_auth()
+    def _get_session_info(self):
+        i = 10
+        o = "/get_access_token"
+        a = "1f4c7624c4902af9123dcf3cd79c72d1"
+        # Encode the secret key
+        key = a.encode('utf-8')
+        
+        # Create HMAC object using SHA-512
+        hmac_obj = hmac.new(key, digestmod=hashlib.sha512)
 
+        # Get the current timestamp and perform the division
+        r = int(time.time()) // (i * 1000)
+        # Encode the value of r as bytes
+        r_bytes = str(r).encode('utf-8')
+
+        # Generate the HMAC signature
+        hmac_obj.update(r_bytes)
+        signature = hmac_obj.digest()
+
+        # Convert to a URL-safe base64 encoding
+        b64_signature = base64.urlsafe_b64encode(signature).decode('utf-8')
+
+        # Strip any trailing '=' characters
+        totp = b64_signature.rstrip("=")
+        response = self.session.get(
+            SpotifyApi.SPOTIFY_GET_ACCESS_TOKEN_URL.format(totp=totp),
+        )
+        check_response(response)
+        return response.json()
     def _set_session_auth(self):
         home_page = self.get_home_page()
-        self.session_info = json.loads(
-            re.search(
-                r'<script id="session" data-testid="session" type="application/json">(.+?)</script>',
-                home_page,
-            ).group(1)
-        )
+        # self.session_info = json.loads(
+            # re.search(
+                # r'<script id="session" data-testid="session" type="application/json">(.+?)</script>',
+                # home_page,
+            # ).group(1)
+        # )
+        self.session_info = self._get_session_info()
         self.config_info = json.loads(
             re.search(
                 r'<script id="config" data-testid="config" type="application/json">(.+?)</script>',
@@ -128,12 +176,13 @@ class SpotifyApi:
             self.GID_METADATA_API_URL.format(gid=gid, media_type=media_type)
         )
         check_response(response)
+        print(response.text)
         return response.json()
 
     def get_lyrics(self, track_id: str) -> dict | None:
         self._refresh_session_auth()
         response = self.session.get(self.LYRICS_API_URL.format(track_id=track_id))
-        if response.status_code == 404:
+        if response.status_code == 400:
             return None
         check_response(response)
         return response.json()
@@ -306,10 +355,35 @@ class SpotifyApi:
 
     def get_widevine_license(self, challenge: bytes, media_type: str) -> bytes:
         self._refresh_session_auth()
+        self.session.headers.update(
+            {
+                'client-token': 'AABCxIQgBJgbMRr/Bxzl70P0O5DLkI09yWxlS5g7mli8rqXjVyWOp8jhWFexkHETjH2Ls4PMaNQEfGrnMTRNJJ2h0G/yZmqA2wKJV7XGMlazIQcG0CbWJabPNfj5Ieg2REfcBVzqI5FwAUr8g6AD/RyIEVCnnDro7H85cnSptZWN93soHslO2+vXAtcD7AyAy91zmcFvH9cdctOqLeCQXVgQhAT+dpadWzF0x53MBclkEYhfw/OrbOGR2Y5R+Cx1Tp7BhnhLyaixxAsnF765EaIhRL11qhvzJyrABAgXvQnbPw==',
+   
+        })
+        print(self.session.headers)
         response = self.session.post(
             self.WIDEVINE_LICENSE_API_URL.format(type=media_type),
             challenge,
         )
+        self.session.headers.update(
+            {
+                'accept': '*/*',
+                'accept-language': 'en-US,en;q=0.9,ja;q=0.8',
+                'cache-control': 'no-cache',
+                'dnt': '1',
+                'origin': self.SPOTIFY_HOME_PAGE_URL,
+                'pragma': 'no-cache',
+                'priority': 'u=1, i',
+                'referer': self.SPOTIFY_HOME_PAGE_URL,
+                'sec-ch-ua': '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36',
+                'content-type': 'application/x-www-form-urlencoded',
+        })
         check_response(response)
         return response.content
 
